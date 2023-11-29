@@ -11,9 +11,13 @@ class MC_Dataset(Dataset):
         self,
         csv_path,
         subtitles_path,
-        features_path,
+        features_path_video,
+        features_path_face=None,
+        features_path_pose=None,
         max_feats=10,
-        features_dim=768,
+        features_dim_video=768,
+        features_dim_face=35,
+        features_dim_pose=768,
         tokenizer=None,
         use_context=True,
         type_map=None,
@@ -25,9 +29,19 @@ class MC_Dataset(Dataset):
             self.subs = pickle.load(open(subtitles_path, "rb"))
         else:
             self.subs = None
-        self.features = th.load(features_path)
+        self.features = th.load(features_path_video)
+        if features_path_face:
+            self.features_face = th.load(features_path_face)
+        else:
+            self.features_face = {}
+        if features_path_pose:
+            self.features_pose = th.load(features_path_pose)
+        else:
+            self.features_pose = {}
         self.max_feats = max_feats
-        self.features_dim = features_dim
+        self.features_dim = features_dim_video
+        self.features_dim_face = features_dim_face
+        self.features_dim_pose = features_dim_pose
         self.mask = tokenizer.mask_token if tokenizer is not None else None
         self.use_context = use_context
         mc = 0
@@ -87,6 +101,52 @@ class MC_Dataset(Dataset):
             video_len = self.max_feats
 
         return video, video_len
+    
+    def _get_face(self, video_id):
+        if video_id not in self.features_face:
+            face = th.zeros(1, self.features_dim_face)
+        else:
+            face = self.features_face[video_id].float()
+            if not len(face):
+                face = th.zeros(1, self.features_dim_face)
+        if len(face) > self.max_feats:
+            sampled = []
+            for j in range(self.max_feats):
+                sampled.append(face[(j * len(face)) // self.max_feats])
+            face = th.stack(sampled)
+            face_len = self.max_feats
+        elif len(face) < self.max_feats:
+            face_len = len(face)
+            face = th.cat(
+                [face, th.zeros(self.max_feats - face_len, self.features_dim_face)], 0
+            )
+        else:
+            face_len = self.max_feats
+
+        return face, face_len
+    
+    def _get_pose(self, video_id):
+        if video_id not in self.features_pose:
+            pose = th.zeros(1, self.features_dim_pose)
+        else:
+            pose = self.features_pose[video_id].float()
+            if not len(pose):
+                pose = th.zeros(1, self.features_dim_pose)
+        if len(pose) > self.max_feats:
+            sampled = []
+            for j in range(self.max_feats):
+                sampled.append(pose[(j * len(pose)) // self.max_feats])
+            pose = th.stack(sampled)
+            pose_len = self.max_feats
+        elif len(pose) < self.max_feats:
+            pose_len = len(pose)
+            pose = th.cat(
+                [pose, th.zeros(self.max_feats - pose_len, self.features_dim_pose)], 0
+            )
+        else:
+            pose_len = self.max_feats
+
+        return pose, pose_len
 
     def __getitem__(self, idx):
         video_id = self.data["video_id"].values[idx]
@@ -111,7 +171,10 @@ class MC_Dataset(Dataset):
 
         # get features
         video, video_len = self._get_video(video_id, start, end)
-
+        face, face_len = self._get_face(video_id)
+        pose, pose_len = self._get_pose(video_id)
+        # face, face_len = None, None
+        # pose, pose_len = None, None
         # get answer id
         answer_id = -1  # for hidden set testing
         if "answer_id" in self.data:
@@ -130,6 +193,10 @@ class MC_Dataset(Dataset):
         return {
             "video": video,
             "video_len": video_len,
+            "face": face,
+            "face_len": face_len,
+            "pose": pose,
+            "pose_len": pose_len,
             "text": text,
             "qid": qid,
             "answer_id": answer_id,
@@ -139,8 +206,16 @@ class MC_Dataset(Dataset):
 
 def mc_collate_fn(batch):
     bs = len(batch)
+    
     video = th.stack([batch[i]["video"] for i in range(bs)])
     video_len = th.tensor([batch[i]["video_len"] for i in range(bs)], dtype=th.long)
+    
+    face = th.stack([batch[i]["face"] for i in range(bs)])
+    face_len = th.tensor([batch[i]["face_len"] for i in range(bs)], dtype=th.long)
+    
+    pose = th.stack([batch[i]["pose"] for i in range(bs)])
+    pose_len = th.tensor([batch[i]["pose_len"] for i in range(bs)], dtype=th.long)
+    
     text = [
         [batch[i]["text"][j] for i in range(bs)] for j in range(len(batch[0]["text"]))
     ]
@@ -151,6 +226,10 @@ def mc_collate_fn(batch):
     return {
         "video": video,
         "video_len": video_len,
+        'face': face,
+        'face_len': face_len,
+        'pose': pose,
+        'pose_len': pose_len,
         "text": text,
         "qid": qid,
         "answer_id": answer_id,
@@ -198,9 +277,13 @@ def build_mc_dataset(dataset_name, split, args, tokenizer):
     return MC_Dataset(
         csv_path=csv_path,
         subtitles_path=subtitles_path,
-        features_path=features_path,
+        features_path_video=features_path,
+        features_path_face=None,
+        features_path_pose=None,
         max_feats=args.max_feats,
-        features_dim=args.features_dim,
+        features_dim_video=args.features_dim_video,
+        features_dim_face=args.features_dim_face,
+        features_dim_pose=args.features_dim_pose,
         tokenizer=tokenizer,
         use_context=args.use_context,
         prefix=args.prefix,

@@ -35,7 +35,9 @@ def build_model(args):
                 local_files_only=True
             )
             model = DebertaV2ForMaskedLM(
-                features_dim=args.features_dim if args.use_video else 0,
+                features_dim_video=args.features_dim_video if args.use_video else 0,
+                features_dim_face=args.features_dim_face if args.use_face else 0,
+                features_dim_pose=args.features_dim_pose if args.use_pose else 0,
                 max_feats=args.max_feats,
                 freeze_lm=args.freeze_lm,
                 freeze_mlm=args.freeze_mlm,
@@ -49,7 +51,9 @@ def build_model(args):
             )
         else:
             model = DebertaV2ForMaskedLM.from_pretrained(
-                features_dim=args.features_dim if args.use_video else 0,
+                features_dim_video=args.features_dim_video if args.use_video else 0,
+                features_dim_face=args.features_dim_face if args.use_face else 0,
+                features_dim_pose=args.features_dim_pose if args.use_pose else 0,
                 max_feats=args.max_feats,
                 freeze_lm=args.freeze_lm,
                 freeze_mlm=args.freeze_mlm,

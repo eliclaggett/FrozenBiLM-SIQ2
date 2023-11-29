@@ -434,7 +434,19 @@ def get_args_parser():
         help="maximum number of video features considered, one per frame",
     )
     parser.add_argument(
-        "--features_dim",
+        "--features_dim_video",
+        type=int,
+        default=768,
+        help="dimension of the visual embedding space",
+    )
+    parser.add_argument(
+        "--features_dim_face",
+        type=int,
+        default=35,
+        help="dimension of the visual embedding space",
+    )
+    parser.add_argument(
+        "--features_dim_pose",
         type=int,
         default=768,
         help="dimension of the visual embedding space",
@@ -444,6 +456,18 @@ def get_args_parser():
         dest="use_video",
         action="store_false",
         help="disables usage of video",
+    )
+    parser.add_argument(
+        "--no_face",
+        dest="use_face",
+        action="store_false",
+        help="disables usage of face",
+    )
+    parser.add_argument(
+        "--no_pose",
+        dest="use_pose",
+        action="store_false",
+        help="disables usage of pose",
     )
     parser.add_argument(
         "--no_context",

@@ -21,7 +21,22 @@ Then, save it to "model/ckpt/frozenbilm_tvqa.pth"
 
 2) Extract features
 
+`python3 extract/siq2_prep.py` set video path and desired output path for each video and save that in one big lookup table
+
+`./installation_extract.sh` visual feats per second for each video, seperate files
+
 3) Merge features
+
+
+`./installation_merge.sh` all visual feats are 60x768 keyed by video id in one big clip.pth
+
+`python3 ./installation_merge_face.py` facial feats per second for each video, one big face.pth
+
+<!-- `python3 ./installation_merge_pose.py` pose feats per second for each video, one big pose.pth -->
+
+<!-- MC_Dataset self.features is the dictionary of 60 frames for video, but we set max_feats to 10 so we sample 10 frames
+
+in batch_dict, video is 1x10x768 -->
 
 ## Running
 1) Test that the pretrained model can be evaluated on Social IQ2 \

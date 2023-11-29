@@ -955,7 +955,9 @@ class DebertaV2Embeddings(nn.Module):
     def __init__(
         self,
         config,
-        features_dim,
+        features_dim_video,
+        features_dim_face,
+        features_dim_pose
     ):
         super().__init__()
         pad_token_id = getattr(config, "pad_token_id", 0)
@@ -987,13 +989,28 @@ class DebertaV2Embeddings(nn.Module):
             "position_ids", torch.arange(config.max_position_embeddings).expand((1, -1))
         )
 
-        self.features_dim = features_dim
+        self.features_dim = features_dim_video
+        self.features_dim_face = features_dim_face
+        self.features_dim_pose = features_dim_pose
+        
         if self.features_dim:
-            self.linear_video = nn.Linear(features_dim, config.hidden_size)
+            self.linear_video = nn.Linear(features_dim_video, config.hidden_size)
+        if self.features_dim_face:
+            self.linear_face = nn.Linear(features_dim_face, config.hidden_size)
+        if self.features_dim_pose:
+            self.linear_pose = nn.Linear(features_dim_pose, config.hidden_size)
 
     def get_video_embedding(self, video):
         video = self.linear_video(video)
         return video
+    
+    def get_face_embedding(self, face):
+        face = self.linear_face(face)
+        return face
+    
+    def get_pose_embedding(self, pose):
+        pose = self.linear_pose(pose)
+        return pose
 
     def forward(
         self,
@@ -1003,6 +1020,8 @@ class DebertaV2Embeddings(nn.Module):
         mask=None,
         inputs_embeds=None,
         video=None,
+        face=None,
+        pose=None
     ):
         if input_ids is not None:
             input_shape = input_ids.size()
@@ -1014,6 +1033,14 @@ class DebertaV2Embeddings(nn.Module):
             if self.features_dim and video is not None:
                 video = self.get_video_embedding(video)
                 inputs_embeds = torch.cat([video, inputs_embeds], 1)
+                input_shape = inputs_embeds[:, :, 0].shape
+            if self.features_dim_face and face is not None:
+                face = self.get_face_embedding(face)
+                inputs_embeds = torch.cat([face, inputs_embeds], 1)
+                input_shape = inputs_embeds[:, :, 0].shape
+            if self.features_dim_pose and pose is not None:
+                pose = self.get_pose_embedding(pose)
+                inputs_embeds = torch.cat([pose, inputs_embeds], 1)
                 input_shape = inputs_embeds[:, :, 0].shape
 
         seq_length = input_shape[1]
@@ -1126,7 +1153,9 @@ class DebertaV2Model(DebertaV2PreTrainedModel):
         self,
         config,
         max_feats=10,
-        features_dim=768,
+        features_dim_video=768,
+        features_dim_face=35,
+        features_dim_pose=768,
         freeze_lm=False,
         ds_factor_attn=8,
         ds_factor_ff=8,
@@ -1137,7 +1166,9 @@ class DebertaV2Model(DebertaV2PreTrainedModel):
 
         self.embeddings = DebertaV2Embeddings(
             config,
-            features_dim,
+            features_dim_video,
+            features_dim_face,
+            features_dim_pose
         )
         self.encoder = DebertaV2Encoder(
             config,
@@ -1148,7 +1179,9 @@ class DebertaV2Model(DebertaV2PreTrainedModel):
         self.z_steps = 0
         self.config = config
 
-        self.features_dim = features_dim
+        self.features_dim = features_dim_video
+        self.features_dim_face = features_dim_face
+        self.features_dim_pose = features_dim_pose
         self.max_feats = max_feats
         if freeze_lm:
             for n, p in self.named_parameters():
@@ -1187,6 +1220,10 @@ class DebertaV2Model(DebertaV2PreTrainedModel):
         return_dict=None,
         video=None,
         video_mask=None,
+        face=None,
+        face_mask=None,
+        pose=None,
+        pose_mask=None
     ):
         output_attentions = (
             output_attentions
@@ -1224,6 +1261,20 @@ class DebertaV2Model(DebertaV2PreTrainedModel):
                 video_mask = torch.ones(video_shape, device=device)
             attention_mask = torch.cat([video_mask, attention_mask], 1)
             input_shape = attention_mask.size()
+            
+        if self.features_dim_face and face is not None:
+            if face_mask is None:
+                face_shape = face[:, :, 0].size()
+                face_mask = torch.ones(face_shape, device=device)
+            attention_mask = torch.cat([face_mask, attention_mask], 1)
+            input_shape = attention_mask.size()
+        
+        if self.features_dim_pose and pose is not None:
+            if pose_mask is None:
+                pose_shape = pose[:, :, 0].size()
+                pose_mask = torch.ones(pose_shape, device=device)
+            attention_mask = torch.cat([pose_mask, attention_mask], 1)
+            input_shape = attention_mask.size()
 
         if token_type_ids is None:
             token_type_ids = torch.zeros(input_shape, dtype=torch.long, device=device)
@@ -1235,6 +1286,8 @@ class DebertaV2Model(DebertaV2PreTrainedModel):
             mask=attention_mask,
             inputs_embeds=inputs_embeds,
             video=video,
+            face=face,
+            pose=pose
         )
         embedding_output, position_embeddings = (
             embedding_output["embeddings"],
@@ -1295,7 +1348,9 @@ class DebertaV2ForMaskedLM(DebertaV2PreTrainedModel):
         self,
         config,
         max_feats=10,
-        features_dim=768,
+        features_dim_video=768,
+        features_dim_face=35,
+        features_dim_pose=768,
         freeze_lm=True,
         freeze_mlm=True,
         ds_factor_attn=8,
@@ -1323,7 +1378,9 @@ class DebertaV2ForMaskedLM(DebertaV2PreTrainedModel):
         self.deberta = DebertaV2Model(
             config,
             max_feats,
-            features_dim,
+            features_dim_video,
+            features_dim_face,
+            features_dim_pose,
             freeze_lm,
             ds_factor_attn,
             ds_factor_ff,
@@ -1331,7 +1388,7 @@ class DebertaV2ForMaskedLM(DebertaV2PreTrainedModel):
             dropout,
         )
         self.lm_predictions = DebertaV2OnlyMLMHead(config)
-        self.features_dim = features_dim
+        self.features_dim_video = features_dim_video
         if freeze_mlm:
             for n, p in self.lm_predictions.named_parameters():
                 if ft_ln and "LayerNorm" in n:
@@ -1424,6 +1481,10 @@ class DebertaV2ForMaskedLM(DebertaV2PreTrainedModel):
         return_dict=None,
         video=None,
         video_mask=None,
+        face=None,
+        face_mask=None,
+        pose=None,
+        pose_mask=None,
         mlm=False,
     ):
         r"""
@@ -1448,6 +1509,10 @@ class DebertaV2ForMaskedLM(DebertaV2PreTrainedModel):
             return_dict=return_dict,
             video=video,
             video_mask=video_mask,
+            face=face,
+            face_mask=face_mask,
+            pose=pose,
+            pose_mask=pose_mask
         )
 
         if labels is not None:
@@ -1461,6 +1526,27 @@ class DebertaV2ForMaskedLM(DebertaV2PreTrainedModel):
                     device=labels.device,
                 )
                 labels = torch.cat([video_labels, labels], 1)
+            
+            if (
+                self.features_dim and face is not None
+            ):  # ignore the label predictions for visual tokens
+                face_shape = face[:, :, 0].size()
+                face_labels = torch.tensor(
+                    [[-100] * face_shape[1]] * face_shape[0],
+                    dtype=torch.long,
+                    device=labels.device,
+                )
+                labels = torch.cat([face_labels, labels], 1)
+            if (
+                self.features_dim and pose is not None
+            ):  # ignore the label predictions for visual tokens
+                pose_shape = pose[:, :, 0].size()
+                pose_labels = torch.tensor(
+                    [[-100] * pose_shape[1]] * pose_shape[0],
+                    dtype=torch.long,
+                    device=labels.device,
+                )
+                labels = torch.cat([pose_labels, labels], 1)
 
         # sequence_output = outputs[0]
         modified = self.emd_context_layer(

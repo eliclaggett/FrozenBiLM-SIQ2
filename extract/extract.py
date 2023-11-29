@@ -42,6 +42,12 @@ parser.add_argument(
 parser.add_argument(
     "--feature_dim", type=int, default=768, help="output video feature dimension"
 )
+parser.add_argument(
+    "--feature_dim_face", type=int, default=35, help="OpenFace feature dimension"
+)
+parser.add_argument(
+    "--feature_dim_pose", type=int, default=768, help="OpenPose feature dimension"
+)
 args = parser.parse_args()
 
 dataset = VideoLoader(
@@ -68,6 +74,7 @@ with th.no_grad():
     for k, data in enumerate(loader):
         input_file = data["input"][0]
         output_file = data["output"][0]
+        print(np.load(data['output'][0]).shape)
         if len(data["video"].shape) > 3:
             print(
                 "Computing features of video {}/{}: {}".format(
@@ -94,3 +101,4 @@ with th.no_grad():
                 np.save(output_file, features)
         else:
             print("Video {} already processed.".format(input_file))
+        break

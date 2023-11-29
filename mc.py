@@ -21,9 +21,13 @@ from model import build_model, get_tokenizer
 from main import get_args_parser
 from util.misc import get_mask, adjust_learning_rate, mask_tokens
 from util.metrics import MetricLogger
+from transformers import logging
 
-wandb.login(key='bc996178ebc8a1764f13bd78671123e200893952')
-wandb.init(project='frozen_bilm')
+logging.set_verbosity_error()
+
+# wandb.login(key='bc996178ebc8a1764f13bd78671123e200893952')
+# wandb.init(project='frozen_bilm')
+wandb = None
 
 def train_one_epoch(
     model: torch.nn.Module,
@@ -46,6 +50,14 @@ def train_one_epoch(
         video = batch_dict["video"].to(device)
         video_len = batch_dict["video_len"]
         video_mask = get_mask(video_len, video.size(1)).to(device)
+        
+        face = batch_dict['face'].to(device)
+        face_len = batch_dict["face_len"]
+        face_mask = get_mask(face_len, face.size(1)).to(device)
+        
+        pose = batch_dict['pose'].to(device)
+        pose_len = batch_dict["pose_len"]
+        pose_mask = get_mask(pose_len, pose.size(1)).to(device)
 
         text = batch_dict["text"]
         logits_list = []
@@ -62,6 +74,10 @@ def train_one_epoch(
             output = model(
                 video=video,
                 video_mask=video_mask,
+                face=face,
+                face_mask=face_mask,
+                pose=pose,
+                pose_mask=pose_mask,
                 input_ids=encoded["input_ids"].to(device),
                 attention_mask=encoded["attention_mask"].to(device),
             )
@@ -125,7 +141,8 @@ def train_one_epoch(
             num_training_steps=num_training_steps,
             args=args,
         )
-        wandb.log({'epoch': epoch+1, 'loss': loss_value, 'lr': optimizer.param_groups[0]["lr"]})
+        if wandb:
+            wandb.log({'epoch': epoch+1, 'loss': loss_value, 'lr': optimizer.param_groups[0]["lr"]})
 
         metric_logger.update(loss=loss_value, **loss_dict_reduced)
         metric_logger.update(lr=optimizer.param_groups[0]["lr"])
@@ -159,6 +176,15 @@ def evaluate(
         video = batch_dict["video"].to(device)
         video_len = batch_dict["video_len"]
         video_mask = get_mask(video_len, video.size(1)).to(device)
+        
+        face = batch_dict['face'].to(device)
+        face_len = batch_dict['face_len']
+        face_mask = get_mask(face_len, face.size(1)).to(device)
+        
+        pose = batch_dict['pose'].to(device)
+        pose_len = batch_dict['pose_len']
+        pose_mask = get_mask(pose_len, pose.size(1)).to(device)
+        
         text = batch_dict["text"]
         logits_list = []
         for aid in range(len(text)):
@@ -174,6 +200,10 @@ def evaluate(
             output = model(
                 video=video,
                 video_mask=video_mask,
+                face=face,
+                face_mask=face_mask,
+                pose=pose,
+                pose_mask=pose_mask,
                 input_ids=encoded["input_ids"].to(device),
                 attention_mask=encoded["attention_mask"].to(device),
             )
