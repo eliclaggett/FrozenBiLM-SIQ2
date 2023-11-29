@@ -73,13 +73,15 @@ def train_one_epoch(
             ]
             logits = logits.softmax(-1)
             logits_list.append(logits[:, 0])
-        skip_batch=False
-        for l in logits_list:
-            if (len(l) != 4):
-                skip_batch = True
-        if(skip_batch):
-            print('skipping batch with wrong number of answers')
-            continue
+        # skip_batch=False
+        # for l in logits_list:
+        #     if (len(l) != 4):
+        #         skip_batch = True
+        # if(skip_batch):
+        #     print('skipping batch with wrong number of answers')
+        #     continue
+        # else:
+        #     print(batch_dict)
         logits = torch.stack(logits_list, 1)
         gt = batch_dict["answer_id"].to(device)
         if data_loader.dataset.mc > 1:
