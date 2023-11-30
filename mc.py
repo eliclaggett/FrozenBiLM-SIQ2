@@ -25,9 +25,9 @@ from transformers import logging
 
 logging.set_verbosity_error()
 
-# wandb.login(key='bc996178ebc8a1764f13bd78671123e200893952')
-# wandb.init(project='frozen_bilm')
-wandb = None
+wandb.login(key='bc996178ebc8a1764f13bd78671123e200893952')
+wandb.init(project='frozen_bilm')
+# wandb = None
 
 def train_one_epoch(
     model: torch.nn.Module,

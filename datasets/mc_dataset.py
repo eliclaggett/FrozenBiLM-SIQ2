@@ -272,14 +272,16 @@ def build_mc_dataset(dataset_name, split, args, tokenizer):
             raise NotImplementedError
         subtitles_path = args.siq2_subtitles_path
         features_path = args.siq2_features_path
+        features_path_face = args.siq2_features_path_face
+        features_path_pose = args.siq2_features_path_pose
     else:
         raise NotImplementedError
     return MC_Dataset(
         csv_path=csv_path,
         subtitles_path=subtitles_path,
         features_path_video=features_path,
-        features_path_face=None,
-        features_path_pose=None,
+        features_path_face=features_path_face,
+        features_path_pose=features_path_pose,
         max_feats=args.max_feats,
         features_dim_video=args.features_dim_video,
         features_dim_face=args.features_dim_face,

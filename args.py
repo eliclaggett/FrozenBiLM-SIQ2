@@ -225,6 +225,16 @@ def get_args_parser():
         default=os.path.join(DATA_DIR, name2folder["siq2"], "clip.pth"),
     )
     parser.add_argument(
+        "--siq2_features_path_face",
+        # default=os.path.join(DATA_DIR, name2folder["siq2"], "face.pth"),
+        default='/mnt/d/face.pth'
+    )
+    parser.add_argument(
+        "--siq2_features_path_pose",
+        # default=os.path.join(DATA_DIR, name2folder["siq2"], "pose.pth"),
+        default=None
+    )
+    parser.add_argument(
         "--siq2_train_csv_path",
         default=os.path.join(DATA_DIR, name2folder["siq2"], "train.csv"),
     )
@@ -442,13 +452,13 @@ def get_args_parser():
     parser.add_argument(
         "--features_dim_face",
         type=int,
-        default=35,
+        default=48,
         help="dimension of the visual embedding space",
     )
     parser.add_argument(
         "--features_dim_pose",
         type=int,
-        default=768,
+        default=76,
         help="dimension of the visual embedding space",
     )
     parser.add_argument(
