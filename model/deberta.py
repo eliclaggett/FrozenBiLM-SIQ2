@@ -1157,6 +1157,7 @@ class DebertaV2Model(DebertaV2PreTrainedModel):
         features_dim_face=35,
         features_dim_pose=768,
         freeze_lm=False,
+        freeze_notnew=False,
         ds_factor_attn=8,
         ds_factor_ff=8,
         ft_ln=False,
@@ -1183,6 +1184,14 @@ class DebertaV2Model(DebertaV2PreTrainedModel):
         self.features_dim_face = features_dim_face
         self.features_dim_pose = features_dim_pose
         self.max_feats = max_feats
+        
+        if freeze_notnew:
+            for n, p in self.named_parameters():
+                if (not "linear_face" in n) and (not "adapter" in n) and (not 'linear_pose' in n):
+                    if ft_ln and "LayerNorm" in n:
+                        continue
+                    else:
+                        p.requires_grad_(False)
         if freeze_lm:
             for n, p in self.named_parameters():
                 if (not "linear_video" in n) and (not "adapter" in n):
@@ -1192,6 +1201,31 @@ class DebertaV2Model(DebertaV2PreTrainedModel):
                         p.requires_grad_(False)
 
         self.init_weights()
+    
+    def update_settings(self, settings):
+        if settings['freeze_notnew']:
+            for n, p in self.named_parameters():
+                if (not "linear_face" in n) and (not "adapter" in n) and (not 'linear_pose' in n):
+                    if settings['ft_ln'] and "LayerNorm" in n:
+                        continue
+                    else:
+                        p.requires_grad_(False)
+        else:
+            for n, p in self.named_parameters():
+                if (not "linear_face" in n) and (not "adapter" in n) and (not 'linear_pose' in n):
+                    if settings['ft_ln'] and "LayerNorm" in n:
+                        continue
+                    else:
+                        p.requires_grad_(True)
+                        
+            # Reset using other possible frozen configurations
+            if settings['freeze_lm']:
+                for n, p in self.named_parameters():
+                    if (not "linear_video" in n) and (not "adapter" in n):
+                        if settings['ft_ln'] and "LayerNorm" in n:
+                            continue
+                        else:
+                            p.requires_grad_(False)
 
     def get_input_embeddings(self):
         return self.embeddings.word_embeddings
@@ -1353,6 +1387,7 @@ class DebertaV2ForMaskedLM(DebertaV2PreTrainedModel):
         features_dim_pose=768,
         freeze_lm=True,
         freeze_mlm=True,
+        freeze_notnew=False,
         ds_factor_attn=8,
         ds_factor_ff=8,
         ft_ln=True,
@@ -1382,6 +1417,7 @@ class DebertaV2ForMaskedLM(DebertaV2PreTrainedModel):
             features_dim_face,
             features_dim_pose,
             freeze_lm,
+            freeze_notnew,
             ds_factor_attn,
             ds_factor_ff,
             ft_ln,
@@ -1406,6 +1442,16 @@ class DebertaV2ForMaskedLM(DebertaV2PreTrainedModel):
             if freeze_last:
                 self.answer_embeddings.requires_grad_(False)
                 self.answer_bias.requires_grad_(False)
+
+    def update_settings(self, settings):
+        if settings['freeze_last']:
+            self.answer_embeddings.requires_grad_(False)
+            self.answer_bias.requires_grad_(False)
+        else:
+            self.answer_embeddings.requires_grad_(True)
+            self.answer_bias.requires_grad_(True)
+            
+        self.deberta.update_settings(settings)
 
     def get_output_embeddings(self):
         return self.lm_predictions.lm_head.decoder

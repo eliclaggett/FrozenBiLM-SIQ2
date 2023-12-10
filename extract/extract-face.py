@@ -6,8 +6,10 @@ import torch
 from tqdm import tqdm
 
 
+ROOT_DIR = '/home/eli/code/FrozenBiLM'
+
 extracted = {}
-train = pd.read_csv('/home/eli/code/datasets/SIQ2/train.csv')
+train = pd.read_csv(f'{ROOT_DIR}/datasets/SIQ2/train.csv')
 for vid in tqdm(train['video_id'].unique(), total=len(train['video_id'].unique())):
     if (os.path.isfile(f'/mnt/d/extracted-features/openface_facialfeatures_video/{vid}.csv')):
         
@@ -22,4 +24,4 @@ for vid in tqdm(train['video_id'].unique(), total=len(train['video_id'].unique()
         # Save a sample of 10 faces for each video 
         extracted[vid] = torch.as_tensor(action_units.iloc[np.arange(0, len(action_units), len(action_units) / 10)].values.tolist())
 
-torch.save(extracted, '/mnt/d/face.pth')
+torch.save(extracted, f'{ROOT_DIR}/datasets/SIQ2/face.pth')

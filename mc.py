@@ -25,9 +25,26 @@ from transformers import logging
 
 logging.set_verbosity_error()
 
-wandb.login(key='bc996178ebc8a1764f13bd78671123e200893952')
-wandb.init(project='frozen_bilm')
-# wandb = None
+# wandb.login(key='bc996178ebc8a1764f13bd78671123e200893952')
+# wandb.init(project='frozen_bilm')
+wandb = None
+
+
+
+# Linear Probing + Fine Tuning (LP-FT) Configuration
+
+# Step 1) Linear Probing
+# epochs = 1
+# lr = 3e-4
+# args.freeze_notnew=True
+# args.freeze_last=False
+
+# Step 2) Fine Tuning
+# epochs = 1
+# lr = 3e-4
+# args.freeze_notnew=False
+# args.freeze_last=True
+
 
 def train_one_epoch(
     model: torch.nn.Module,
@@ -89,15 +106,13 @@ def train_one_epoch(
             ]
             logits = logits.softmax(-1)
             logits_list.append(logits[:, 0])
-        # skip_batch=False
-        # for l in logits_list:
-        #     if (len(l) != 4):
-        #         skip_batch = True
-        # if(skip_batch):
-        #     print('skipping batch with wrong number of answers')
-        #     continue
-        # else:
-        #     print(batch_dict)
+        skip_batch=False
+        for l in logits_list:
+            if (len(l) != args.batch_size):
+                skip_batch = True
+        if(skip_batch):
+            print('skipping batch with wrong number of answers')
+            continue
         logits = torch.stack(logits_list, 1)
         gt = batch_dict["answer_id"].to(device)
         if data_loader.dataset.mc > 1:
@@ -170,6 +185,7 @@ def evaluate(
     res = {}
     accs = []
     print('Evaluating model')
+    # necessary_max_len = 0
     for i_batch, batch_dict in enumerate(
         metric_logger.log_every(data_loader, args.print_freq, header)
     ):
@@ -191,11 +207,14 @@ def evaluate(
             encoded = tokenizer(
                 text[aid],
                 add_special_tokens=True,
-                max_length=args.max_tokens,
+                max_length=0,
                 padding="longest",
                 truncation=True,
                 return_tensors="pt",
             )
+            # if encoded['input_ids'].shape[1] > necessary_max_len:
+                # necessary_max_len = encoded['input_ids'].shape[1]
+            # continue
             # forward
             output = model(
                 video=video,
@@ -214,6 +233,7 @@ def evaluate(
                 encoded["input_ids"] == tokenizer.mask_token_id
             ]
             logits_list.append(logits.softmax(-1)[:, 0])
+        # continue
         if (len(logits_list[-1]) == 0):
             print('logit error, not the right number of questions')
             print(batch_dict['qid'])
@@ -257,7 +277,8 @@ def evaluate(
             for i, (qid, pred, type) in enumerate(zip(qids, preds, types)):
                 res[str(qid)] = int(pred.cpu().detach().item())
 
-
+    print(f'Longest token length: {necessary_max_len}')
+    exit()
     all_res = dist.all_gather(res)
     results = reduce(lambda a, b: a.update(b) or a, all_res, {})
     # assert len(results) == len(data_loader.dataset)
@@ -436,18 +457,38 @@ def main(args):
                     print(f"Starting epoch {epoch}")
                 if args.distributed:
                     sampler_train.set_epoch(epoch)
-                train_stats = train_one_epoch(
-                    model=model,
-                    tokenizer=tokenizer,
-                    data_loader=item.dataloader_train,
-                    optimizer=optimizer,
-                    device=device,
-                    epoch=epoch,
-                    args=args,
-                    max_norm=args.clip_max_norm,
-                )
+                
+                if (args.lp_ft):
+                    # Start LP-FT two epochs
+                    
+                    print(f"Starting linear probing")
+                    model.update_settings({'freeze_notnew':True, 'freeze_last':False, 'ft_ln': args.ft_ln, 'freeze_lm':args.freeze_lm})
+                    
+                    train_stats = train_one_epoch(
+                        model=model,
+                        tokenizer=tokenizer,
+                        data_loader=item.dataloader_train,
+                        optimizer=optimizer,
+                        device=device,
+                        epoch=epoch,
+                        args=args,
+                        max_norm=args.clip_max_norm,
+                    )
+                    
+                    print(f"Starting fine tuning")
+                    model.update_settings({'freeze_notnew':False, 'freeze_last':args.freeze_last, 'ft_ln': args.ft_ln, 'freeze_lm':args.freeze_lm})
+                    
+                    train_stats = train_one_epoch(
+                        model=model,
+                        tokenizer=tokenizer,
+                        data_loader=item.dataloader_train,
+                        optimizer=optimizer,
+                        device=device,
+                        epoch=epoch+1,
+                        args=args,
+                        max_norm=args.clip_max_norm,
+                    )
 
-                if (epoch + 1) % args.eval_skip == 0:
                     val_stats = {}
                     for i, item in enumerate(tuples):
                         print(f"Validating {item.dataset_name}")
@@ -500,8 +541,73 @@ def main(args):
                                         "w",
                                     ),
                                 )
+                    # End LP-FT two epochs
                 else:
+                    # Start normal fine tuning one epoch
+                    train_stats = train_one_epoch(
+                        model=model,
+                        tokenizer=tokenizer,
+                        data_loader=item.dataloader_train,
+                        optimizer=optimizer,
+                        device=device,
+                        epoch=epoch,
+                        args=args,
+                        max_norm=args.clip_max_norm,
+                    )
+
                     val_stats = {}
+                    for i, item in enumerate(tuples):
+                        print(f"Validating {item.dataset_name}")
+
+                        curr_val_stats, acc = evaluate(
+                            model=model,
+                            tokenizer=tokenizer,
+                            data_loader=item.dataloader_val,
+                            device=device,
+                            dataset_name=item.dataset_name,
+                            args=args,
+                            split="val",
+                            type_map=item.dataloader_val.dataset.type_map,
+                        )
+                        val_stats[item.dataset_name + "_acc"] = acc
+                        if acc > best_acc:
+                            best_epoch = epoch
+                            best_acc = acc
+
+                            if args.save_dir and dist.is_main_process():
+                                checkpoint_path = os.path.join(
+                                    args.save_dir, f"best_model.pth"
+                                )
+                                dist.save_on_master(
+                                    {
+                                        "model": model.state_dict(),
+                                        "optimizer": optimizer.state_dict(),
+                                        "epoch": epoch,
+                                        "args": args,
+                                    },
+                                    checkpoint_path,
+                                )
+                                json.dump(
+                                    curr_val_stats,
+                                    open(
+                                        os.path.join(
+                                            args.save_dir,
+                                            item.dataset_name + "_val.json",
+                                        ),
+                                        "w",
+                                    ),
+                                )
+                                json.dump(
+                                    {"acc": acc, "ep": epoch},
+                                    open(
+                                        os.path.join(
+                                            args.save_dir,
+                                            item.dataset_name + "acc_val.json",
+                                        ),
+                                        "w",
+                                    ),
+                                )
+                    # End normal fine tuning one epoch 
 
                 log_stats = {
                     **{f"train_{k}": v for k, v in train_stats.items()},

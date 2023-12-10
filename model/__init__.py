@@ -41,6 +41,7 @@ def build_model(args):
                 max_feats=args.max_feats,
                 freeze_lm=args.freeze_lm,
                 freeze_mlm=args.freeze_mlm,
+                freeze_notnew=args.freeze_notnew,
                 ft_ln=args.ft_ln,
                 ds_factor_attn=args.ds_factor_attn,
                 ds_factor_ff=args.ds_factor_ff,

@@ -1,2 +1,2 @@
 #!/bin/bash
-python mc.py --eval --combine_datasets siq2 --combine_datasets_val siq2 --save_dir=/home/eli/code/FrozenBiLM/zssiq2 --suffix="." --batch_size_val=1 --max_tokens=128 --load=/home/eli/code/FrozenBiLM/zssiq2/best_model.pth
+python mc.py --eval --no_pose --combine_datasets siq2 --combine_datasets_val siq2 --save_dir=/home/eli/code/FrozenBiLM/zssiq2 --suffix="." --batch_size_val=4 --max_tokens=512 --load=/home/eli/code/FrozenBiLM/zssiq2/best_model.pth

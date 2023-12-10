@@ -2,8 +2,9 @@ import argparse
 import os
 
 PRESAVE_DIR = ""
-MODEL_DIR = "/home/eli/code/FrozenBiLM/model"
-DATA_DIR = "/home/eli/code/datasets"
+ROOT_DIR = "/home/eli/code/FrozenBiLM"
+MODEL_DIR = ROOT_DIR+"/model"
+DATA_DIR = ROOT_DIR+"/datasets"
 SSD_DIR = ""
 name2folder = {
     "webvid": "WebVid",
@@ -226,8 +227,8 @@ def get_args_parser():
     )
     parser.add_argument(
         "--siq2_features_path_face",
-        # default=os.path.join(DATA_DIR, name2folder["siq2"], "face.pth"),
-        default='/mnt/d/face.pth'
+        default=os.path.join(DATA_DIR, name2folder["siq2"], "face.pth"),
+        # default=None
     )
     parser.add_argument(
         "--siq2_features_path_pose",
@@ -392,6 +393,11 @@ def get_args_parser():
         dest="freeze_last",
         action="store_false",
         help="whether to finetune answer embedding module or not",
+    )
+    parser.add_argument(
+        "--lp_ft",
+        action="store_true",
+        help="linear probing and fine tuning",
     )
 
     # Run specific

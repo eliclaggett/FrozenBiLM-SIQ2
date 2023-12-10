@@ -14,7 +14,10 @@ def ravel_index(x, dims):
     return i
 
 extracted = {}
-train = pd.read_csv('/home/eli/code/datasets/SIQ2/train.csv')
+
+ROOT_DIR = '/home/eli/code/FrozenBiLM'
+
+train = pd.read_csv(f'{ROOT_DIR}/datasets/SIQ2/train.csv')
 for vid in tqdm(train['video_id'].unique(), total=len(train['video_id'].unique())):
     pose_dir = f'/mnt/d/extracted-features/openpose_skeletons/{vid}'
     if (os.path.isdir(pose_dir)):
@@ -39,4 +42,4 @@ for vid in tqdm(train['video_id'].unique(), total=len(train['video_id'].unique()
         
         extracted[vid] = sample
 
-torch.save(extracted, '/mnt/d/pose.pth')
+torch.save(extracted, f'{ROOT_DIR}/pose.pth')
