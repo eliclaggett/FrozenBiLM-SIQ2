@@ -4,3 +4,5 @@ model/ckpt/*
 deberta-v2-xlarge/*
 deberta-v3-base/*
 zssiq2/*
+datasets/SIQ2
+pose.pth
